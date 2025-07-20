@@ -95,5 +95,7 @@ uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ## Acknowledgements
-This application uses the Scryfall API to fetch Magic: The Gathering card data, including commander details and random suggestions.
+-This application uses the Scryfall API to fetch Magic: The Gathering card data, including commander details and random suggestions.
 Special thanks to the Scryfall team for providing such an excellent resource!
+
+-Magic: The Gathering, Magic, and their logos are trademarks of Wizards of the Coast LLC. This project is unaffiliated with and not endorsed by Wizards of the Coast.
