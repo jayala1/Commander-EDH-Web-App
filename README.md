@@ -2,6 +2,12 @@
 
 Commander EDH Tray is a web-based application designed to help **Magic: The Gathering Commander (EDH)** players keep track of their life totals, commander damage, and other counters during a game. It features **real-time updates** using WebSockets, **commander search and display** powered by the **Scryfall API**, and **game state persistence**.
 
+<img width="1791" height="811" alt="image" src="https://github.com/user-attachments/assets/04bd7819-7e2f-441b-afe2-9a938b21301d" />
+
+<img width="1540" height="847" alt="image" src="https://github.com/user-attachments/assets/9586b38a-ae74-40e2-b8fe-fd9f3945573a" />
+
+
+
 ---
 
 ## Features
