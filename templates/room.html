@@ -1,0 +1,976 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="room-container">
+    <div class="room-header">
+        <h2>Room: {{ room_id }}</h2>
+        <div class="player-join">
+            <form id="join-form">
+                <input type="text" id="player-name" placeholder="Your Name" required>
+                <button type="submit" class="btn btn-primary">Join Game</button>
+            </form>
+        </div>
+    </div>
+    
+    <div class="game-board" id="game-board">
+        {% for player_name, player in room.players.items() %}
+        <div class="player-tray" data-player="{{ player_name }}">
+            <div class="player-header">
+                <h3>{{ player_name }}</h3>
+                
+                <div class="commander-search">
+                    <input type="text" 
+                           id="commander-search-{{ player_name }}" 
+                           placeholder="Search for commander..."
+                           class="commander-input"
+                           autocomplete="off">
+                    <div class="suggestions" id="suggestions-{{ player_name }}"></div>
+                    <button onclick="searchCommander('{{ player_name }}')" class="btn btn-small">Set Commander</button>
+                </div>
+                
+                {% if player.commander.name %}
+                <div class="commander-display" id="commander-display-{{ player_name }}">
+                    <div class="commander-card">
+                        <img src="{{ player.commander.image_url }}" 
+                             alt="{{ player.commander.name }}" 
+                             class="commander-image"
+                             onclick="showCommanderDetails('{{ player_name }}')">
+                        <div class="commander-info">
+                            <div class="commander-name">{{ player.commander.name }}</div>
+                            <div class="commander-cost">{{ player.commander.mana_cost }}</div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="no-commander" id="commander-display-{{ player_name }}">
+                    <div class="placeholder-card" onclick="focusCommanderSearch('{{ player_name }}')">
+                        <div class="placeholder-text">Click to set commander</div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="tray-grid">
+                <div class="life-section">
+                    <h4>LIFE</h4>
+                    <div class="counter">
+                        <button class="btn-counter" onclick="updateLife('{{ player_name }}', -1)">-</button>
+                        <span class="life-count">{{ player.life }}</span>
+                        <button class="btn-counter" onclick="updateLife('{{ player_name }}', 1)">+</button>
+                    </div>
+                    <div class="life-buttons">
+                        <button class="btn-quick" onclick="updateLife('{{ player_name }}', -5)">-5</button>
+                        <button class="btn-quick" onclick="updateLife('{{ player_name }}', 5)">+5</button>
+                    </div>
+                </div>
+                
+                <div class="commander-damage-section">
+                    <h4>COMMANDER DAMAGE</h4>
+                    <div class="damage-grid">
+                        {% for target, damage in player.commander_damage.items() %}
+                        <div class="damage-row">
+                            <span class="target-name">{{ target }}:</span>
+                            <div class="damage-controls">
+                                <button class="btn-counter-small" onclick="updateCommanderDamage('{{ player_name }}', '{{ target }}', -1)">-</button>
+                                <span class="damage-count">{{ damage }}</span>
+                                <button class="btn-counter-small" onclick="updateCommanderDamage('{{ player_name }}', '{{ target }}', 1)">+</button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <div class="tax-misc-section">
+                    <h4>TAX + MISC + POISON</h4>
+                    <div class="tax-row">
+                        <span>Tax:</span>
+                        <div class="counter-controls">
+                            <button class="btn-counter-small" onclick="updateTax('{{ player_name }}', -2)">-2</button>
+                            <span class="tax-count">{{ player.tax }}</span>
+                            <button class="btn-counter-small" onclick="updateTax('{{ player_name }}', 2)">+2</button>
+                        </div>
+                    </div>
+                    <div class="misc-row">
+                        <span>Misc:</span>
+                        <div class="counter-controls">
+                            <button class="btn-counter-small" onclick="updateMisc('{{ player_name }}', -1)">-</button>
+                            <span class="misc-count">{{ player.misc }}</span>
+                            <button class="btn-counter-small" onclick="updateMisc('{{ player_name }}', 1)">+</button>
+                        </div>
+                    </div>
+                    <div class="poison-row">
+                        <span>Poison:</span>
+                        <div class="counter-controls">
+                            <button class="btn-counter-small" onclick="updatePoison('{{ player_name }}', -1)">-</button>
+                            <span class="poison-count">{{ player.poison }}</span>
+                            <button class="btn-counter-small" onclick="updatePoison('{{ player_name }}', 1)">+</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div id="commander-modal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeCommanderModal()">&times;</span>
+        <div id="commander-details">
+            </div>
+    </div>
+</div>
+
+<div class="random-commanders-panel">
+    <button onclick="toggleRandomCommanders()" class="btn btn-secondary">Random Commanders</button>
+    <div id="random-commanders" class="random-commanders-grid" style="display: none;"></div>
+</div>
+
+<div class="save-load-panel">
+    <button onclick="toggleSaveLoadPanel()" class="btn btn-secondary">💾 Save/Load Game</button>
+    <div id="save-load-content" class="save-load-content" style="display: none;">
+        <div class="save-section">
+            <h4>Save Game</h4>
+            <input type="text" id="save-filename" placeholder="Enter filename (optional)">
+            <button onclick="saveGame()" class="btn btn-primary">Save</button>
+        </div>
+        
+        <div class="load-section">
+            <h4>Load Game</h4>
+            <select id="saved-games-list">
+                <option value="">Select a saved game...</option>
+            </select>
+            <button onclick="loadGame()" class="btn btn-primary">Load</button>
+            <button onclick="refreshSavedGamesList()" class="btn btn-outline">Refresh</button>
+        </div>
+        
+        <div class="export-section">
+            <h4>Export</h4>
+            <button onclick="exportGame()" class="btn btn-outline">Export as JSON</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const roomId = '{{ room_id }}';
+let ws = null;
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 5;
+let heartbeatInterval = null;
+
+// Initialize WebSocket connection
+function initWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/${roomId}`;
+    
+    ws = new WebSocket(wsUrl);
+    
+    ws.onopen = function(event) {
+        console.log('WebSocket connected');
+        reconnectAttempts = 0;
+        
+        heartbeatInterval = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'ping' }));
+            }
+        }, 30000);
+        
+        ws.send(JSON.stringify({ type: 'request_sync' }));
+        updateConnectionStatus(true);
+    };
+    
+    ws.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            handleWebSocketMessage(data);
+        } catch (e) {
+            console.error('Error parsing WebSocket message:', e);
+        }
+    };
+    
+    ws.onclose = function(event) {
+        console.log('WebSocket disconnected');
+        clearInterval(heartbeatInterval);
+        updateConnectionStatus(false);
+        
+        if (reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++;
+            console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})...`);
+            setTimeout(initWebSocket, 2000 * reconnectAttempts);
+        }
+    };
+    
+    ws.onerror = function(error) {
+        console.error('WebSocket error:', error);
+    };
+}
+
+function handleWebSocketMessage(data) {
+    console.log('Received WebSocket message:', data);
+    
+    switch(data.type) {
+        case 'life_update':
+            updateLifeDisplay(data.player, data.life);
+            break;
+        case 'tax_update':
+            updateTaxDisplay(data.player, data.tax);
+            break;
+        case 'misc_update':
+            updateMiscDisplay(data.player, data.misc);
+            break;
+        case 'poison_update': 
+            updatePoisonDisplay(data.player, data.poison);
+            break;
+        case 'commander_damage_update':
+            updateCommanderDamageDisplay(data.player, data.target, data.damage);
+            break;
+        case 'commander_update':
+            updateCommanderDisplay(data.player, data.commander);
+            break;
+        case 'player_joined':
+            location.reload();
+            break;
+        case 'room_loaded': 
+            location.reload();
+            break;
+        case 'full_sync':
+            syncGameState(data.game_state);
+            break;
+        case 'pong':
+            break;
+        default:
+            console.log('Unknown message type:', data.type);
+    }
+}
+
+function syncGameState(gameState) {
+    console.log('Syncing game state:', gameState);
+    
+    Object.entries(gameState.players).forEach(([playerName, playerData]) => {
+        updateLifeDisplay(playerName, playerData.life);
+        updateTaxDisplay(playerName, playerData.tax);
+        updateMiscDisplay(playerName, playerData.misc);
+        updatePoisonDisplay(playerName, playerData.poison);
+        
+        Object.entries(playerData.commander_damage).forEach(([target, damage]) => {
+            updateCommanderDamageDisplay(playerName, target, damage);
+        });
+        
+        if (playerData.commander && playerData.commander.name) {
+            updateCommanderDisplay(playerName, playerData.commander);
+        }
+    });
+}
+
+function updateConnectionStatus(connected) {
+    let statusIndicator = document.getElementById('connection-status');
+    if (!statusIndicator) {
+        statusIndicator = document.createElement('div');
+        statusIndicator.id = 'connection-status';
+        statusIndicator.style.cssText = `
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 5px;
+            color: white;
+            font-size: 12px;
+            z-index: 1000;
+        `;
+        document.body.appendChild(statusIndicator);
+    }
+    
+    if (connected) {
+        statusIndicator.textContent = '🟢 Connected';
+        statusIndicator.style.backgroundColor = 'green';
+    } else {
+        statusIndicator.textContent = '🔴 Disconnected';
+        statusIndicator.style.backgroundColor = 'red';
+    }
+}
+
+// Join game functionality
+document.getElementById('join-form').onsubmit = async function(e) {
+    e.preventDefault();
+    const playerName = document.getElementById('player-name').value;
+    
+    const formData = new FormData();
+    formData.append('player_name', playerName);
+    
+    try {
+        const response = await fetch(`/api/join_player/${roomId}`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to join game');
+        }
+    } catch (error) {
+        console.error('Error joining game:', error);
+        alert('Error joining game');
+    }
+};
+
+// FIXED: Commander details functionality
+async function showCommanderDetails(playerName) {
+    console.log('Showing commander details for:', playerName);
+    
+    // Get commander name from the player's display
+    const playerTray = document.querySelector(`[data-player="${playerName}"]`);
+    if (!playerTray) {
+        console.error('Player tray not found for:', playerName);
+        return;
+    }
+    
+    const commanderNameElement = playerTray.querySelector('.commander-name');
+    if (!commanderNameElement) {
+        alert('No commander set for this player');
+        return;
+    }
+    
+    const commanderName = commanderNameElement.textContent.trim();
+    if (!commanderName) {
+        alert('No commander found for this player');
+        return;
+    }
+    
+    await showCommanderModal(playerName, commanderName);
+}
+
+async function showCommanderModal(playerName, commanderName) {
+    const modal = document.getElementById('commander-modal');
+    const detailsDiv = document.getElementById('commander-details');
+    
+    // Show modal with loading state
+    modal.style.display = 'block';
+    detailsDiv.innerHTML = `
+        <div class="modal-loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 1rem; text-align: center;">Loading commander details...</p>
+        </div>
+    `;
+    
+    try {
+        console.log('Fetching details for commander:', commanderName);
+        
+        // Fetch commander details from Scryfall
+        const response = await fetch(`/api/search_commander?name=${encodeURIComponent(commanderName)}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const commander = await response.json();
+        console.log('Commander data received:', commander);
+        
+        // Populate modal with commander details
+        detailsDiv.innerHTML = createCommanderDetailsHTML(commander, playerName);
+        
+    } catch (error) {
+        console.error('Error loading commander details:', error);
+        detailsDiv.innerHTML = `
+            <div style="padding: 2rem; text-align: center;">
+                <h3>Error Loading Commander</h3>
+                <p>${error.message}</p>
+                <p>Commander: ${commanderName}</p>
+                <button onclick="closeCommanderModal()" class="btn btn-primary">Close</button>
+            </div>
+        `;
+    }
+}
+
+function createCommanderDetailsHTML(commander, playerName) {
+    const colorIdentity = commander.color_identity || [];
+    const powerToughness = (commander.power !== undefined && commander.toughness !== undefined) ? 
+        `${commander.power}/${commander.toughness}` : 'N/A';
+    
+    return `
+        <div class="commander-details-container">
+            <div class="commander-image-section">
+                <img src="${commander.image_url}" 
+                     alt="${commander.name}" 
+                     class="commander-full-image"
+                     onerror="this.src='/static/placeholder-card.png'">
+                
+                <div class="color-identity-section">
+                    <div class="color-identity-title">Color Identity</div>
+                    <div class="color-identity">
+                        ${colorIdentity.length > 0 ? 
+                            colorIdentity.map(color => 
+                                `<div class="color-pip ${color}">${color}</div>`
+                            ).join('') :
+                            '<div class="color-pip colorless">C</div>'
+                        }
+                    </div>
+                </div>
+            </div>
+            
+            <div class="commander-info-section">
+                <div class="commander-title">${commander.name}</div>
+                
+                <div class="commander-mana-cost">
+                    ${commander.mana_cost || 'No mana cost'}
+                </div>
+                
+                <div class="commander-type">${commander.type_line || 'Unknown Type'}</div>
+                
+                <div class="commander-stats">
+                    <div class="stat-box">
+                        <div class="stat-label">CMC</div>
+                        <div class="stat-value">${commander.cmc || 0}</div>
+                    </div>
+                    
+                    ${commander.power !== undefined ? `
+                        <div class="stat-box">
+                            <div class="stat-label">Power/Toughness</div>
+                            <div class="stat-value">${powerToughness}</div>
+                        </div>
+                    ` : ''}
+                    
+                    <div class="stat-box">
+                        <div class="stat-label">Valid Commander</div>
+                        <div class="stat-value">${commander.is_valid_commander ? '✅' : '❌'}</div>
+                    </div>
+                </div>
+                
+                ${commander.oracle_text ? `
+                    <div class="commander-text">
+                        <div class="oracle-text">${formatOracleText(commander.oracle_text)}</div>
+                    </div>
+                ` : ''}
+                
+                <div class="commander-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">Set:</span>
+                        <span class="meta-value">${commander.set_name || 'Unknown'}</span>
+                    </div>
+                    
+                    <div class="meta-item">
+                        <span class="meta-label">Artist:</span>
+                        <span class="meta-value">${commander.artist || 'Unknown'}</span>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 2rem; text-align: center;">
+                    <button onclick="closeCommanderModal()" class="btn btn-primary">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function formatOracleText(text) {
+    if (!text) return '';
+    
+    // Replace mana symbols with styled spans and line breaks
+    let formatted = text
+        .replace(/\{([WUBRG])\}/g, '<span class="mana-symbol $1">$1</span>')
+        .replace(/\{(\d+)\}/g, '<span class="mana-symbol generic">$1</span>')
+        .replace(/\{([WUBRG])\/([WUBRG])\}/g, '<span class="mana-symbol hybrid">$1/$2</span>')
+        .replace(/\{T\}/g, '<span class="mana-symbol tap">⭯</span>')
+        .replace(/\n/g, '<br><br>');
+    
+    return formatted;
+}
+
+function closeCommanderModal() {
+    const modal = document.getElementById('commander-modal');
+    modal.style.display = 'none';
+}
+
+// Close modal when clicking outside of it
+window.onclick = function(event) {
+    const modal = document.getElementById('commander-modal');
+    if (event.target === modal) {
+        closeCommanderModal();
+    }
+}
+
+// Close modal with Escape key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeCommanderModal();
+    }
+});
+
+// Game state update functions
+async function updateLife(playerName, change) {
+    const formData = new FormData();
+    formData.append('change', change);
+    
+    try {
+        const response = await fetch(`/api/update_life/${roomId}/${playerName}`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        console.log(`Life updated for ${playerName}: ${change}`);
+    } catch (error) {
+        console.error('Error updating life:', error);
+        alert('Failed to update life');
+    }
+}
+
+async function updateTax(playerName, change) {
+    const formData = new FormData();
+    formData.append('change', change);
+    
+    try {
+        const response = await fetch(`/api/update_tax/${roomId}/${playerName}`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        console.log(`Tax updated for ${playerName}: ${change}`);
+    } catch (error) {
+        console.error('Error updating tax:', error);
+        alert('Failed to update tax');
+    }
+}
+
+async function updateMisc(playerName, change) {
+    const formData = new FormData();
+    formData.append('change', change);
+    
+    try {
+        const response = await fetch(`/api/update_misc/${roomId}/${playerName}`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        console.log(`Misc updated for ${playerName}: ${change}`);
+    } catch (error) {
+        console.error('Error updating misc:', error);
+        alert('Failed to update misc');
+    }
+}
+
+async function updatePoison(playerName, change) {
+    const formData = new FormData();
+    formData.append('change', change);
+    
+    try {
+        const response = await fetch(`/api/update_poison/${roomId}/${playerName}`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        console.log(`Poison updated for ${playerName}: ${change}`);
+    } catch (error) {
+        console.error('Error updating poison:', error);
+        alert('Failed to update poison');
+    }
+}
+
+async function updateCommanderDamage(playerName, target, change) {
+    const formData = new FormData();
+    formData.append('target', target);
+    formData.append('change', change);
+    
+    try {
+        const response = await fetch(`/api/update_commander_damage/${roomId}/${playerName}`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        console.log(`Commander damage updated: ${playerName} -> ${target}: ${change}`);
+    } catch (error) {
+        console.error('Error updating commander damage:', error);
+        alert('Failed to update commander damage');
+    }
+}
+
+// Display update functions
+function updateLifeDisplay(player, life) {
+    const playerTray = document.querySelector(`[data-player="${player}"]`);
+    if (playerTray) {
+        const lifeSpan = playerTray.querySelector('.life-count');
+        if (lifeSpan) {
+            lifeSpan.textContent = life;
+            lifeSpan.style.color = life <= 0 ? '#ff0000' : life <= 10 ? '#ff6b6b' : '#ffffff';
+        }
+    }
+}
+
+function updateTaxDisplay(player, tax) {
+    const playerTray = document.querySelector(`[data-player="${player}"]`);
+    if (playerTray) {
+        const taxSpan = playerTray.querySelector('.tax-count');
+        if (taxSpan) {
+            taxSpan.textContent = tax;
+        }
+    }
+}
+
+function updateMiscDisplay(player, misc) {
+    const playerTray = document.querySelector(`[data-player="${player}"]`);
+    if (playerTray) {
+        const miscSpan = playerTray.querySelector('.misc-count');
+        if (miscSpan) {
+            miscSpan.textContent = misc;
+        }
+    }
+}
+
+function updatePoisonDisplay(player, poison) {
+    const playerTray = document.querySelector(`[data-player="${player}"]`);
+    if (playerTray) {
+        const poisonSpan = playerTray.querySelector('.poison-count');
+        if (poisonSpan) {
+            poisonSpan.textContent = poison;
+            poisonSpan.classList.remove('warning', 'lethal');
+            if (poison >= 10) {
+                poisonSpan.classList.add('lethal');
+            } else if (poison >= 7) {
+                poisonSpan.classList.add('warning');
+            }
+        }
+    }
+}
+
+function updateCommanderDamageDisplay(player, target, damage) {
+    const playerTray = document.querySelector(`[data-player="${player}"]`);
+    if (playerTray) {
+        const damageRows = playerTray.querySelectorAll('.damage-row');
+        damageRows.forEach(row => {
+            const targetName = row.querySelector('.target-name').textContent.replace(':', '').trim();
+            if (targetName === target) {
+                const damageSpan = row.querySelector('.damage-count');
+                if (damageSpan) {
+                    damageSpan.textContent = damage;
+                    
+                    damageSpan.classList.remove('warning', 'lethal');
+                    if (damage >= 21) {
+                        damageSpan.classList.add('lethal');
+                    } else if (damage >= 15) {
+                        damageSpan.classList.add('warning');
+                    }
+                }
+            }
+        });
+    }
+}
+
+function updateCommanderDisplay(player, commander) {
+    const displayDiv = document.getElementById(`commander-display-${player}`);
+    if (displayDiv) {
+        displayDiv.innerHTML = `
+            <div class="commander-card">
+                <img src="${commander.image_url}" 
+                     alt="${commander.name}" 
+                     class="commander-image"
+                     onclick="showCommanderDetails('${player}')"
+                     style="cursor: pointer;">
+                <div class="commander-info">
+                    <div class="commander-name">${commander.name}</div>
+                    <div class="commander-cost">${commander.mana_cost}</div>
+                </div>
+            </div>
+        `;
+        displayDiv.className = 'commander-display';
+    }
+}
+
+// Commander search functionality
+let searchTimeouts = {};
+
+function setupCommanderSearch(playerName) {
+    const searchInput = document.getElementById(`commander-search-${playerName}`);
+    const suggestionsDiv = document.getElementById(`suggestions-${playerName}`);
+    
+    if (!searchInput || !suggestionsDiv) return;
+    
+    searchInput.addEventListener('input', function() {
+        const query = this.value.trim();
+        
+        if (searchTimeouts[playerName]) {
+            clearTimeout(searchTimeouts[playerName]);
+        }
+        
+        if (query.length < 2) {
+            suggestionsDiv.style.display = 'none';
+            return;
+        }
+        
+        searchTimeouts[playerName] = setTimeout(async () => {
+            try {
+                const response = await fetch(`/api/commander_suggestions?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                showSuggestions(playerName, data.suggestions);
+            } catch (error) {
+                console.error('Error fetching suggestions:', error);
+            }
+        }, 300);
+    });
+    
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.commander-search')) {
+            suggestionsDiv.style.display = 'none';
+        }
+    });
+}
+
+function showSuggestions(playerName, suggestions) {
+    const suggestionsDiv = document.getElementById(`suggestions-${playerName}`);
+    
+    if (suggestions.length === 0) {
+        suggestionsDiv.style.display = 'none';
+        return;
+    }
+    
+    suggestionsDiv.innerHTML = suggestions.map(suggestion => 
+        `<div class="suggestion" onclick="selectSuggestion('${playerName}', '${suggestion.replace(/'/g, "\\'")}')">
+            ${suggestion}
+        </div>`
+    ).join('');
+    
+    suggestionsDiv.style.display = 'block';
+}
+
+function selectSuggestion(playerName, commanderName) {
+    const searchInput = document.getElementById(`commander-search-${playerName}`);
+    const suggestionsDiv = document.getElementById(`suggestions-${playerName}`);
+    
+    searchInput.value = commanderName;
+    suggestionsDiv.style.display = 'none';
+    
+    searchCommander(playerName);
+}
+
+async function searchCommander(playerName) {
+    const searchInput = document.getElementById(`commander-search-${playerName}`);
+    const commanderName = searchInput.value.trim();
+    
+    if (!commanderName) {
+        alert('Please enter a commander name');
+        return;
+    }
+    
+    try {
+        const formData = new FormData();
+        formData.append('commander_name', commanderName);
+        
+        const response = await fetch(`/api/set_commander/${roomId}/${playerName}`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            searchInput.value = '';
+            document.getElementById(`suggestions-${playerName}`).style.display = 'none';
+            
+            if (!data.commander.is_valid_commander) {
+                alert('Warning: This card may not be a valid commander!');
+            }
+        } else {
+            alert('Commander not found or error occurred');
+        }
+    } catch (error) {
+        console.error('Error setting commander:', error);
+        alert('Error setting commander');
+    }
+}
+
+function focusCommanderSearch(playerName) {
+    const searchInput = document.getElementById(`commander-search-${playerName}`);
+    if (searchInput) {
+        searchInput.focus();
+    }
+}
+
+async function toggleRandomCommanders() {
+    const panel = document.getElementById('random-commanders');
+    
+    if (panel.style.display === 'none' || !panel.style.display) {
+        try {
+            const response = await fetch('/api/random_commanders');
+            const data = await response.json();
+            
+            panel.innerHTML = data.commanders.map(commander => 
+                `<div class="random-commander" onclick="useRandomCommander('${commander.name.replace(/'/g, "\\'")}')">
+                    <img src="${commander.image_url}" alt="${commander.name}">
+                    <div class="commander-name">${commander.name}</div>
+                </div>`
+            ).join('');
+            
+            panel.style.display = 'grid';
+        } catch (error) {
+            console.error('Error fetching random commanders:', error);
+        }
+    } else {
+        panel.style.display = 'none';
+    }
+}
+
+function useRandomCommander(commanderName) {
+    console.log('Selected random commander:', commanderName);
+    document.getElementById('random-commanders').style.display = 'none';
+}
+
+
+// Save/Load functionality
+async function toggleSaveLoadPanel() {
+    const panel = document.getElementById('save-load-content');
+    if (panel.style.display === 'none' || !panel.style.display) {
+        panel.style.display = 'block';
+        await refreshSavedGamesList();
+    } else {
+        panel.style.display = 'none';
+    }
+}
+
+async function saveGame() {
+    const filenameInput = document.getElementById('save-filename');
+    const filename = filenameInput.value.trim();
+
+    try {
+        const response = await fetch(`/api/save_game/${roomId}?filename=${encodeURIComponent(filename)}`, {
+            method: 'POST'
+        });
+        if (response.ok) {
+            alert('Game saved successfully!');
+            filenameInput.value = '';
+            await refreshSavedGamesList();
+        } else {
+            const errorData = await response.json();
+            alert(`Failed to save game: ${errorData.message || response.statusText}`);
+        }
+    } catch (error) {
+        console.error('Error saving game:', error);
+        alert('Error saving game.');
+    }
+}
+
+async function loadGame() {
+    const selectElement = document.getElementById('saved-games-list');
+    const filename = selectElement.value;
+
+    if (!filename) {
+        alert('Please select a game to load.');
+        return;
+    }
+
+    if (!confirm(`Are you sure you want to load "${filename}"? Current game state will be lost.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/load_game/${roomId}?filename=${encodeURIComponent(filename)}`, {
+            method: 'POST'
+        });
+        if (response.ok) {
+            alert('Game loaded successfully!');
+            location.reload(); // Reload to sync UI with new state
+        } else {
+            const errorData = await response.json();
+            alert(`Failed to load game: ${errorData.message || response.statusText}`);
+        }
+    } catch (error) {
+        console.error('Error loading game:', error);
+        alert('Error loading game.');
+    }
+}
+
+async function refreshSavedGamesList() {
+    const selectElement = document.getElementById('saved-games-list');
+    selectElement.innerHTML = '<option value="">Select a saved game...</option>'; // Clear existing options
+
+    try {
+        const response = await fetch(`/api/list_saved_games/${roomId}`);
+        if (response.ok) {
+            const data = await response.json();
+            data.files.forEach(file => {
+                const option = document.createElement('option');
+                option.value = file;
+                option.textContent = file;
+                selectElement.appendChild(option);
+            });
+        } else {
+            console.error('Failed to fetch saved games list:', response.statusText);
+        }
+    } catch (error) {
+        console.error('Error fetching saved games list:', error);
+    }
+}
+
+async function exportGame() {
+    try {
+        const response = await fetch(`/api/export_game/${roomId}`);
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `game_state_${roomId}.json`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            alert('Game state exported successfully!');
+        } else {
+            const errorData = await response.json();
+            alert(`Failed to export game: ${errorData.message || response.statusText}`);
+        }
+    } catch (error) {
+        console.error('Error exporting game:', error);
+        alert('Error exporting game.');
+    }
+}
+
+
+// Initialize everything when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize WebSocket
+    initWebSocket();
+    
+    // Setup commander search for all players
+    const playerTrays = document.querySelectorAll('.player-tray');
+    playerTrays.forEach(tray => {
+        const playerName = tray.getAttribute('data-player');
+        setupCommanderSearch(playerName);
+    });
+    
+    // Add periodic sync check
+    setInterval(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'request_sync' }));
+        }
+    }, 60000);
+});
+
+// Handle page visibility changes
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden && ws && ws.readyState !== WebSocket.OPEN) {
+        initWebSocket();
+    }
+});
+</script>
+{% endblock %}

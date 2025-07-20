@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="home-container">
+    <div class="room-actions">
+        <form action="/create_room" method="post">
+            <button type="submit" class="btn btn-primary">Create New Room</button>
+        </form>
+        
+        <form action="/join_room" method="post" class="join-form">
+            <input type="text" name="room_id" placeholder="Enter Room ID" required>
+            <button type="submit" class="btn btn-secondary">Join Room</button>
+        </form>
+    </div>
+    
+    {% if rooms %}
+    <div class="active-rooms">
+        <h2>Active Rooms</h2>
+        {% for room_id, room in rooms.items() %}
+        <div class="room-card">
+            <h3>Room: {{ room_id }}</h3>
+            <p>Players: {{ room.players|length }}/{{ room.max_players }}</p>
+            <a href="/room/{{ room_id }}" class="btn btn-outline">Join</a>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
